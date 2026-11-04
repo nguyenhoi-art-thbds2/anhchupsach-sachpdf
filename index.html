@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ảnh chụp sách → PDF</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1d2330;--card:#fff;--bd:#d9dde5;--ac:#1a7f37;--mut:#667085;--warn:#b42318;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171f;--fg:#e8eaf0;--card:#1d222d;--bd:#363d4d;--ac:#3fb950;--mut:#9aa3b5;--warn:#ff8a80}}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,"Segoe UI",sans-serif;padding:12px}
+h1{font-size:18px;margin:0 0 8px}.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+button,label.btn{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+button.go{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}button:disabled{opacity:.5;cursor:default}
+select{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:6px;font:inherit}
+input[type=number]{width:70px;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px}
+.grid{display:grid;grid-template-columns:270px minmax(0,1fr) 300px;gap:10px}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}
+#list{max-height:70vh;overflow:auto}.row{display:flex;gap:6px;align-items:center;padding:4px;border-radius:6px;cursor:pointer}
+.row.on{background:color-mix(in srgb,var(--ac) 18%,transparent)}.row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row input[type=number]{width:54px}.mut{color:var(--mut);font-size:12px}.warn{color:var(--warn)}
+#wrap{overflow:auto;text-align:center;max-height:78vh}#cv{max-width:none;display:block;margin:0 auto}.row .x{padding:1px 6px;border-color:transparent;background:transparent}canvas{max-width:100%;touch-action:none;border-radius:6px}
+#pv{width:100%;height:auto;background:#888}
+</style>
+</head>
+<body>
+<h1>Ảnh chụp sách → PDF sách + tách PDF theo bài</h1>
+<div class="bar">
+  <label class="btn go">📁 Chọn thư mục ảnh gốc<input id="dir" type="file" webkitdirectory multiple accept="image/*" hidden></label>
+  <label class="btn">Chọn từng ảnh<input id="fl" type="file" multiple accept="image/*" hidden></label>
+  <span class="mut">Tỉ lệ cao/rộng <input id="asp" type="number" step="0.01" value="1.41"></span>
+  <span class="mut">Rộng PDF px <input id="ow" type="number" step="100" value="1400"></span>
+  <span id="st" class="mut">Chưa chọn ảnh.</span>
+</div>
+<div class="grid">
+  <div class="box"><div class="bar" style="margin-bottom:6px">
+    <button id="num">Đánh số từ</button><input id="n0" type="number" value="1" style="width:56px"></div>
+    <div class="mut" style="margin-bottom:4px">Nhập số trang (ô số) và tick “đầu bài”. Trang trống số xếp theo thứ tự ảnh.</div>
+    <div id="list"></div></div>
+  <div class="box">
+    <div class="bar">
+      <button id="prev">◀</button><button id="next">▶</button>
+      <button id="gro">Phóng to +1%</button><button id="shr">Thu nhỏ −1%</button><button id="auto">Tự nhận lại</button><select id="mode" title="Cách nhận diện góc trang"><option value="auto">Tự động</option><option value="book">Sách (giấy trắng + dải vàng)</option><option value="bg">Theo viền trang/nền</option><option value="color">Theo màu (cũ)</option></select>
+      <span class="mut">Kéo 4 chấm đỏ để chỉnh từng góc (có kính lúp khi kéo); kéo ô vuông xanh giữa mỗi cạnh để dời đều cả 2 góc của cạnh đó; kéo giữa khung để dời cả khung; kéo ngoài khung để cuộn ảnh khi đang phóng to. Nếu góc sai, đổi chế độ rồi bấm “Tự nhận lại”. Nên để khung dư ra mép hơn là mất chữ.</span></div>
+    <div class="bar"><button id="zo" title="Thu nhỏ ảnh (Ctrl + lăn chuột)">🔍 −</button><span id="zl" class="mut" style="min-width:56px;text-align:center">Vừa</span><button id="zi" title="Phóng to ảnh">🔍 +</button><button id="zf">Vừa khung (thấy toàn bộ ảnh)</button><button id="z1">100%</button><span style="flex:1"></span><button id="del" title="Xóa ảnh đang chọn khỏi danh sách (phím Delete)">🗑 Xóa ảnh này</button><button id="undo" disabled>↶ Hoàn tác xóa</button></div>
+    <div id="wrap"><canvas id="cv" width="760" height="560"></canvas></div></div>
+  <div class="box"><b>Xem trước trang đã cắt</b><canvas id="pv" width="300" height="423"></canvas>
+    <div id="nt" class="warn"></div></div>
+</div>
+<div class="bar" style="margin-top:10px">
+  <button id="pdfb" class="go" disabled>⬇ PDF cả sách</button>
+  <button id="zipb" class="go" disabled>⬇ ZIP: PDF từng bài</button>
+  <div id="pg" style="display:none;flex:1;min-width:200px;max-width:360px;height:12px;background:var(--bd);border-radius:6px;overflow:hidden"><div id="pgb" style="height:100%;width:0;background:var(--ac);transition:width .15s"></div></div><span id="pgt" class="mut"></span><span id="msg" class="mut"></span>
+</div>
+<script>
+const $=s=>document.querySelector(s),ASP=()=>+$('#asp').value||1.41;
+let items=[],cur=-1,view=null,drag=null,pgs=null,busy=false,trash=[],zm='fit';
+const tick=()=>new Promise(r=>setTimeout(r));
+const prog=v=>{const g=$('#pg');if(v==null){g.style.display='none';$('#pgt').textContent='';return}g.style.display='block';$('#pgb').style.width=Math.round(v*100)+'%';$('#pgt').textContent=Math.round(v*100)+'%'};
+/* ---------- hình học ---------- */
+function homog(s,d){const A=[],b=[];for(let i=0;i<4;i++){const[x,y]=s[i],[u,v]=d[i];
+ A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}
+ for(let i=0;i<8;i++){let p=i;for(let r=i+1;r<8;r++)if(Math.abs(A[r][i])>Math.abs(A[p][i]))p=r;
+  [A[i],A[p]]=[A[p],A[i]];[b[i],b[p]]=[b[p],b[i]];
+  for(let r=0;r<8;r++)if(r!=i){const f=A[r][i]/A[i][i];for(let c=i;c<8;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}
+ return b.map((v,i)=>v/A[i][i])}
+function warp(im,q,W,H){ // lấy trang tứ giác q từ ImageData im thành ảnh W×H
+ const h=homog([[0,0],[W,0],[W,H],[0,H]],q),o=new ImageData(W,H),D=im.data,w=im.width,hh=im.height,O=o.data;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const z=h[6]*x+h[7]*y+1,sx=(h[0]*x+h[1]*y+h[2])/z,sy=(h[3]*x+h[4]*y+h[5])/z,
+  x0=Math.floor(sx),y0=Math.floor(sy),fx=sx-x0,fy=sy-y0,i=(y*W+x)*4;
+  const cx=Math.min(w-1,Math.max(0,x0)),cy=Math.min(hh-1,Math.max(0,y0)),cx1=Math.min(w-1,Math.max(0,x0+1)),cy1=Math.min(hh-1,Math.max(0,y0+1));
+  const a=(cy*w+cx)*4,b=(cy*w+cx1)*4,c=(cy1*w+cx)*4,d=(cy1*w+cx1)*4;
+  for(let k=0;k<3;k++)O[i+k]=D[a+k]*(1-fx)*(1-fy)+D[b+k]*fx*(1-fy)+D[c+k]*(1-fx)*fy+D[d+k]*fx*fy;O[i+3]=255}
+ return o}
+const grow=(q,f)=>{const cx=q.reduce((s,p)=>s+p[0],0)/4,cy=q.reduce((s,p)=>s+p[1],0)/4;return q.map(p=>[cx+(p[0]-cx)*(1+f),cy+(p[1]-cy)*(1+f)])};
+function fit(p){ // x = a + b*t, loại ngoại lai 2 lần
+ for(let it=0;it<3;it++){const n=p.length;if(n<4)return[p[0]?.[1]||0,0];let st=0,sx=0,stt=0,stx=0;
+  for(const[t,x]of p){st+=t;sx+=x;stt+=t*t;stx+=t*x}const den=n*stt-st*st||1,b=(n*stx-st*sx)/den,a=(sx-b*st)/n;
+  if(it==2)return[a,b];const r=p.map(([t,x])=>Math.abs(x-a-b*t)),m=[...r].sort((u,v)=>u-v)[n>>1];p=p.filter((_,i)=>r[i]<=Math.max(3,2.5*m))}}
+function run(get,n,gap){let bs=-1,be=-1,s=-1,l=-1;for(let i=0;i<n;i++)if(get(i)){if(s<0||i-l>gap){if(s>=0&&l-s>be-bs){bs=s;be=l}s=i}l=i}
+ if(s>=0&&l-s>be-bs){bs=s;be=l}return be-bs>0?[bs,be]:null}
+function detectColor(d,w,h){ // d: ImageData nhỏ → {q (toạ độ ảnh nhỏ), note, rv}
+ const M=new Uint8Array(w*h),D=d.data;
+ for(let i=0;i<w*h;i++){const r=D[4*i],g=D[4*i+1],b=D[4*i+2];M[i]=(b-r>12&&b>120)||(r>150&&g>140&&b<110&&r-b>100)?1:0}
+ const L=[],R=[],T=[],B=[];let cl=0,cr=0,nr=0;
+ for(let y=0;y<h;y+=2){const r=run(x=>M[y*w+x],w,14);if(r&&r[1]-r[0]>.3*w){nr++;if(r[0]<=3)cl++;else L.push([y,r[0]]);if(r[1]>=w-4)cr++;else R.push([y,r[1]])}}
+ for(let x=0;x<w;x+=2){const r=run(y=>M[y*w+x],h,14);if(r&&r[1]-r[0]>.3*h){T.push([x,r[0]]);B.push([x,r[1]])}}
+ if(nr<10||T.length<10)return{q:[[w*.03,h*.03],[w*.97,h*.03],[w*.97,h*.97],[w*.03,h*.97]],note:"không tìm thấy trang - hãy kéo 4 góc",rv:true};
+ const clL=cl>.5*nr,clR=cr>.5*nr,l=clL?[0,0]:fit(L),r=clR?[w-1,0]:fit(R),t=fit(T),b=fit(B);
+ const X=(a,c)=>{const x=(a[0]+a[1]*c[0])/(1-a[1]*c[1]);return[x,c[0]+c[1]*x]};
+ const Q=[X(l,t),X(r,t),X(r,b),X(l,b)],dist=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]);
+ if(clL==clR)return{q:grow(Q,.03),note:clL?"khó xác định - nên kiểm tra":"",rv:clL};
+ return gutter(Q,clL,clR,D,w,h)}
+function gutter(Q,clL,clR,D,w,h){const dist=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]);
+ const Wd=(dist(Q[0],Q[1])+dist(Q[3],Q[2]))/2,Hd=(dist(Q[0],Q[3])+dist(Q[1],Q[2]))/2,pw=Hd/ASP(),
+ P=(u,v)=>[0,1].map(k=>(1-u)*(1-v)*Q[0][k]+u*(1-v)*Q[1][k]+u*v*Q[2][k]+(1-u)*v*Q[3][k]);
+ const N=400,pr=[];for(let i=0;i<N;i++){let s=0;for(let j=0;j<20;j++){const p=P(i/(N-1),.12+.76*j/19),x=Math.round(p[0]),y=Math.round(p[1]);
+  if(x>=0&&y>=0&&x<w&&y<h){const o=4*(y*w+x);s+=D[o]+D[o+1]+D[o+2]}}pr.push(s/60)}
+ const sm=(a,k)=>a.map((_,i)=>{let s=0,c=0;for(let j=Math.max(0,i-k);j<=Math.min(N-1,i+k);j++){s+=a[j];c++}return s/c}),
+ dv=sm(pr,2).map((v,i)=>v-sm(pr,40)[i]),ex=clL?1-pw/Wd:pw/Wd,win=.16*pw/Wd;
+ let bi=Math.round(ex*(N-1)),bv=1e9,ok=false;for(let i=Math.max(2,Math.round((ex-win)*(N-1)));i<=Math.min(N-3,Math.round((ex+win)*(N-1)));i++)if(dv[i]<bv){bv=dv[i];bi=i}
+ ok=bv<-4;const ug=bi/(N-1),k=pw/Wd,ua=clL?ug-.05*k:-.015*k,ub=clL?1+.015*k:ug+.05*k;
+ return{q:[P(ua,-.015),P(ub,-.015),P(ub,1.015),P(ua,1.015)],note:ok?"":"không thấy rõ gáy sách (đã ước lượng) - nên kiểm tra",rv:!ok}}
+/* ---------- nhận diện trang theo viền/nền (không phụ thuộc màu) ---------- */
+function comps(on,gw,gh){const lab=new Int32Array(gw*gh).fill(-1),st=[],stk=new Int32Array(gw*gh);
+ for(let i=0;i<gw*gh;i++){if(!on[i]||lab[i]>=0)continue;const id=st.length;let sp=0,n=0,cx=0,cy=0;stk[sp++]=i;lab[i]=id;
+  while(sp){const p=stk[--sp],x=p%gw,y=(p/gw)|0;n++;cx+=x;cy+=y;
+   if(x>0&&on[p-1]&&lab[p-1]<0){lab[p-1]=id;stk[sp++]=p-1}if(x<gw-1&&on[p+1]&&lab[p+1]<0){lab[p+1]=id;stk[sp++]=p+1}
+   if(y>0&&on[p-gw]&&lab[p-gw]<0){lab[p-gw]=id;stk[sp++]=p-gw}if(y<gh-1&&on[p+gw]&&lab[p+gw]<0){lab[p+gw]=id;stk[sp++]=p+gw}}
+  st.push({id,n,cx:cx/n,cy:cy/n})}
+ return{lab,st}}
+function detectBg(d,w,h){
+ const D=d.data,n=w*h,G=new Float32Array(n),fail={q:[[w*.03,h*.03],[w*.97,h*.03],[w*.97,h*.97],[w*.03,h*.97]],note:"không tìm thấy trang - hãy kéo 4 góc",rv:true,fail:true};
+ for(let i=0;i<n;i++)G[i]=(D[4*i]*299+D[4*i+1]*587+D[4*i+2]*114)/1000;
+ const otsu=(A,mx)=>{const B=256,hs=new Float64Array(B);for(let i=0;i<n;i++)hs[Math.min(B-1,(A[i]*(B-1)/mx)|0)]++;
+  let sum=0;for(let i=0;i<B;i++)sum+=i*hs[i];let sb=0,wb=0,best=-1,th=128;
+  for(let i=0;i<B;i++){wb+=hs[i];if(!wb)continue;const wf=n-wb;if(!wf)break;sb+=i*hs[i];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>best){best=v;th=i}}
+  return(th+1)*mx/(B-1)};
+ // màu nền ước lượng từ viền ảnh (trung vị)
+ const ring=[],rw=Math.max(2,Math.round(Math.min(w,h)*.03));
+ for(let y=0;y<h;y+=2)for(let x=0;x<w;x+=2)if(x<rw||y<rw||x>=w-rw||y>=h-rw)ring.push((y*w+x)*4);
+ const med=k=>{const a=ring.map(o=>D[o+k]).sort((p,q)=>p-q);return a[a.length>>1]},bg=[med(0),med(1),med(2)],
+ DS=new Float32Array(n);for(let i=0;i<n;i++)DS[i]=Math.hypot(D[4*i]-bg[0],D[4*i+1]-bg[1],D[4*i+2]-bg[2]);
+ const tg=otsu(G,255),td=Math.max(28,otsu(DS,442)),c=4,gw=Math.ceil(w/c),gh=Math.ceil(h/c),
+ grid=m=>{const cnt=new Uint16Array(gw*gh),tot=new Uint16Array(gw*gh),on=new Uint8Array(gw*gh);
+  for(let y=0;y<h;y++){const r=((y/c)|0)*gw;for(let x=0;x<w;x++){const k=r+((x/c)|0);tot[k]++;if(m(y*w+x))cnt[k]++}}
+  for(let k=0;k<gw*gh;k++)on[k]=cnt[k]*2>tot[k]?1:0;return on},
+ masks=[grid(i=>G[i]>tg),grid(i=>G[i]<tg),grid(i=>DS[i]>td)],
+ area=q=>Math.abs(q.reduce((s,p,i)=>{const r=q[(i+1)%4];return s+p[0]*r[1]-r[0]*p[1]},0))/2;
+ const ext=(lab,id)=>{let a=[1e9,0,0],b=[-1e9,0,0],e=[-1e9,0,0],f=[1e9,0,0];
+  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(lab[y*gw+x]==id){const s=x+y,t=x-y;
+   if(s<a[0])a=[s,x,y];if(t>b[0])b=[t,x,y];if(s>e[0])e=[s,x,y];if(t<f[0])f=[t,x,y]}
+  return[[a[1]*c,a[2]*c],[(b[1]+1)*c,b[2]*c],[(e[1]+1)*c,(e[2]+1)*c],[f[1]*c,(f[2]+1)*c]].map(p=>[Math.min(w-1,p[0]),Math.min(h-1,p[1])])};
+ let best=null;
+ for(const on of masks){const{lab,st}=comps(on,gw,gh);
+  for(const s of st){const a=s.n/(gw*gh);if(a<.1||a>.995)continue;const Q=ext(lab,s.id),A=area(Q);if(A<1)continue;
+   const fill=Math.min(1,s.n*c*c/A),cd=Math.min(1,Math.hypot(s.cx/gw-.5,s.cy/gh-.5)/.7),sc=fill*fill*(.35+Math.min(a,.75))*(1-.4*cd);
+   if(!best||sc>best.sc)best={sc,Q,lab,id:s.id,on}}}
+ if(!best||best.sc<.12)return fail;
+ let{Q,lab,id}=best;const diag=Math.hypot(w,h);
+ { // đóng các khe hẹp (dòng chữ, bóng) rồi chỉ giữ biên NGOÀI của trang
+  const m=new Uint8Array(gw*gh),R=2,tmp=new Uint8Array(gw*gh);for(let i=0;i<gw*gh;i++)m[i]=lab[i]==id?1:0;
+  const pass=(src,dst,dil)=>{for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){let v=dil?0:1;
+    for(let k=-R;k<=R;k++){const X=x+k;if(X<0||X>=gw)continue;const u=src[y*gw+X];if(dil?u:!u){v=dil?1:0;break}}dst[y*gw+x]=v}},
+   pass2=(src,dst,dil)=>{for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){let v=dil?0:1;
+    for(let k=-R;k<=R;k++){const Y=y+k;if(Y<0||Y>=gh)continue;const u=src[Y*gw+x];if(dil?u:!u){v=dil?1:0;break}}dst[y*gw+x]=v}};
+  const A=new Uint8Array(gw*gh);pass(m,tmp,1);pass2(tmp,A,1);pass(A,tmp,0);pass2(tmp,m,0);
+  for(let i=0;i<gw*gh;i++)m[i]=m[i]||(lab[i]==id?1:0);
+  const out=new Uint8Array(gw*gh),stk=[];const push=i=>{if(!m[i]&&!out[i]){out[i]=1;stk.push(i)}};
+  for(let x=0;x<gw;x++){push(x);push((gh-1)*gw+x)}for(let y=0;y<gh;y++){push(y*gw);push(y*gw+gw-1)}
+  while(stk.length){const p=stk.pop(),x=p%gw,y=(p/gw)|0;if(x>0)push(p-1);if(x<gw-1)push(p+1);if(y>0)push(p-gw);if(y<gh-1)push(p+gw)}
+  lab=new Int32Array(gw*gh);for(let i=0;i<gw*gh;i++)lab[i]=out[i]?-1:id; // lấp lỗ bên trong
+  var OUT=out}
+ // tinh chỉnh: khớp đường thẳng cho từng cạnh theo biên vùng trang rồi giao các đường
+ const pts=[[],[],[],[]],sd=(p,A,B)=>{const vx=B[0]-A[0],vy=B[1]-A[1],L=Math.hypot(vx,vy)||1,t=((p[0]-A[0])*vx+(p[1]-A[1])*vy)/(L*L);
+  return[Math.abs((p[0]-A[0])*vy-(p[1]-A[1])*vx)/L,t]},
+ add=(px,py)=>{let bk=-1,bd=1e9;for(let k=0;k<4;k++){const[dd,t]=sd([px,py],Q[k],Q[(k+1)%4]);if(t>.08&&t<.92&&dd<bd){bd=dd;bk=k}}if(bk>=0&&bd<.07*diag)pts[bk].push([px,py])};
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(lab[y*gw+x]==id)for(const[dx,dy]of[[-1,0],[1,0],[0,-1],[0,1]]){const X=x+dx,Y=y+dy;
+  if(X>=0&&Y>=0&&X<gw&&Y<gh&&OUT[Y*gw+X])add((x+.5)*c+dx*c/2,(y+.5)*c+dy*c/2)}
+ const lf=P=>{let m=P;if(m.length<8)return null;for(let it=0;it<3;it++){const k=m.length;if(k<6)return null;let mx=0,my=0;for(const p of m){mx+=p[0];my+=p[1]}mx/=k;my/=k;
+   let sxx=0,syy=0,sxy=0;for(const p of m){const a=p[0]-mx,b=p[1]-my;sxx+=a*a;syy+=b*b;sxy+=a*b}
+   const th=.5*Math.atan2(2*sxy,sxx-syy),ux=Math.cos(th),uy=Math.sin(th);if(it==2)return{p:[mx,my],u:[ux,uy]};
+   const r=m.map(p=>Math.abs(-(p[0]-mx)*uy+(p[1]-my)*ux)),md=[...r].sort((a,b)=>a-b)[k>>1];m=m.filter((_,i)=>r[i]<=Math.max(1.5,2.5*md))}return null},
+ line=k=>{const A=Q[k],B=Q[(k+1)%4],L=Math.hypot(B[0]-A[0],B[1]-A[1])||1,u=[(B[0]-A[0])/L,(B[1]-A[1])/L],f=lf(pts[k]);
+  if(f&&Math.abs(f.u[0]*u[1]-f.u[1]*u[0])<.2)return f;return{p:A,u}},
+ ln=[0,1,2,3].map(line),
+ ix=(A,B)=>{const det=A.u[0]*B.u[1]-A.u[1]*B.u[0];if(Math.abs(det)<.2)return null;const t=((B.p[0]-A.p[0])*B.u[1]-(B.p[1]-A.p[1])*B.u[0])/det;return[A.p[0]+t*A.u[0],A.p[1]+t*A.u[1]]},
+ pr=[ix(ln[3],ln[0]),ix(ln[0],ln[1]),ix(ln[1],ln[2]),ix(ln[2],ln[3])];
+ Q=Q.map((p,k)=>{const r=pr[k];return r&&Math.hypot(r[0]-p[0],r[1]-p[1])<.08*diag?[Math.min(w-1,Math.max(0,r[0])),Math.min(h-1,Math.max(0,r[1]))]:p});
+ // trang bị cắt ở mép ảnh trái/phải?
+ let tl=0,tr=0,r0=1e9,r1=-1;for(let y=0;y<gh;y++){if(lab[y*gw]==id)tl++;if(lab[y*gw+gw-1]==id)tr++;for(let x=0;x<gw;x++)if(lab[y*gw+x]==id){if(y<r0)r0=y;if(y>r1)r1=y}}
+ const rows=Math.max(1,r1-r0+1),clL=tl>.5*rows,clR=tr>.5*rows,dist=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]),
+ Wd=(dist(Q[0],Q[1])+dist(Q[3],Q[2]))/2,Hd=(dist(Q[0],Q[3])+dist(Q[1],Q[2]))/2,pw=Hd/ASP();
+ if(clL!=clR&&Wd>1.2*pw){const g=gutter(Q,clL,clR,D,w,h);g.bg=true;return g}
+ const asp=Hd/Wd,odd=!clL&&!clR&&(asp<.75*ASP()||asp>1.35*ASP()),rv=best.sc<.45||odd;
+ return{q:grow(Q,.015),note:rv?"nhận theo viền trang - nên kiểm tra":"",rv,bg:true}}
+function plaus(q,w,h){const a=Math.abs(q.reduce((s,p,i)=>{const r=q[(i+1)%4];return s+p[0]*r[1]-r[0]*p[1]},0))/2,
+ W=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[3][0],q[2][1]-q[3][1]))/2,H=(Math.hypot(q[3][0]-q[0][0],q[3][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2,r=H/(W||1);
+ return a>.15*w*h&&r>.6*ASP()&&r<1.7*ASP()}
+/* ---------- nhận diện trang SÁCH: tách theo giấy trắng + dải vàng, rồi khớp cạnh & dò gáy ---------- */
+function lix(A,B){const det=A.u[0]*B.u[1]-A.u[1]*B.u[0];if(Math.abs(det)<.15)return null;const t=((B.p[0]-A.p[0])*B.u[1]-(B.p[1]-A.p[1])*B.u[0])/det;return[A.p[0]+t*A.u[0],A.p[1]+t*A.u[1]]}
+function ransacLine(P,ok,tol){const n=P.length;if(n<10)return null;let s=12345;const rnd=()=>(s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff;let best=null,bc=-1;
+ for(let k=0;k<400;k++){const a=P[(rnd()*n)|0],b=P[(rnd()*n)|0],dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy);if(L<25)continue;const u=[dx/L,dy/L];if(!ok(u))continue;
+  let c=0;for(const p of P)if(Math.abs((p[0]-a[0])*u[1]-(p[1]-a[1])*u[0])<tol)c++;if(c>bc){bc=c;best={a,u}}}
+ if(!best||bc<n*.3)return null;
+ const m=P.filter(p=>Math.abs((p[0]-best.a[0])*best.u[1]-(p[1]-best.a[1])*best.u[0])<tol*1.6),k=m.length;if(k<8)return null;
+ let mx=0,my=0;for(const p of m){mx+=p[0];my+=p[1]}mx/=k;my/=k;let sxx=0,syy=0,sxy=0;for(const p of m){const a=p[0]-mx,b=p[1]-my;sxx+=a*a;syy+=b*b;sxy+=a*b}
+ const th=.5*Math.atan2(2*sxy,sxx-syy);let u=[Math.cos(th),Math.sin(th)];if(!ok(u))u=best.u;return{p:[mx,my],u,n:k}}
+function morph(m,gw,gh,R,dil){const t=new Uint8Array(gw*gh),o=new Uint8Array(gw*gh);
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){let v=dil?0:1;for(let k=-R;k<=R;k++){const X=x+k;if(X<0||X>=gw)continue;if(dil?m[y*gw+X]:!m[y*gw+X]){v=dil?1:0;break}}t[y*gw+x]=v}
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){let v=dil?0:1;for(let k=-R;k<=R;k++){const Y=y+k;if(Y<0||Y>=gh)continue;if(dil?t[Y*gw+x]:!t[Y*gw+x]){v=dil?1:0;break}}o[y*gw+x]=v}
+ return o}
+function bookMask(D,w,h){const n=w*h,M=new Uint8Array(n),L=new Float32Array(n);
+ for(let i=0;i<n;i++){const r=D[4*i],g=D[4*i+1],b=D[4*i+2],l=(r*299+g*587+b*114)/1000;L[i]=l;
+  M[i]=((r-b)<18&&l>150&&Math.abs(r-g)<35)||(r>110&&g>.8*r&&b<.6*g&&r-b>55)?1:0}
+ return{M,L}}
+function bookRegion(M,w,h){const c=4,gw=Math.ceil(w/c),gh=Math.ceil(h/c),cnt=new Uint16Array(gw*gh),tot=new Uint16Array(gw*gh);
+ for(let y=0;y<h;y++){const r=((y/c)|0)*gw;for(let x=0;x<w;x++){const k=r+((x/c)|0);tot[k]++;if(M[y*w+x])cnt[k]++}}
+ let on=new Uint8Array(gw*gh);for(let k=0;k<gw*gh;k++)on[k]=cnt[k]*2>tot[k]?1:0;
+ on=morph(morph(on,gw,gh,2,1),gw,gh,2,0);on=morph(morph(on,gw,gh,1,0),gw,gh,1,1);
+ const{lab,st}=comps(on,gw,gh);let b=null;for(const s of st)if(!b||s.n>b.n)b=s;if(!b||b.n<.1*gw*gh)return null;
+ const m=new Uint8Array(gw*gh);for(let i=0;i<gw*gh;i++)m[i]=lab[i]==b.id?1:0;
+ const out=new Uint8Array(gw*gh),stk=[],push=i=>{if(!m[i]&&!out[i]){out[i]=1;stk.push(i)}};
+ for(let x=0;x<gw;x++){push(x);push((gh-1)*gw+x)}for(let y=0;y<gh;y++){push(y*gw);push(y*gw+gw-1)}
+ while(stk.length){const p=stk.pop(),x=p%gw,y=(p/gw)|0;if(x>0)push(p-1);if(x<gw-1)push(p+1);if(y>0)push(p-gw);if(y<gh-1)push(p+gw)}
+ const S=new Uint8Array(gw*gh);let x0=1e9,x1=-1,y0=1e9,y1=-1,tl=0,tr=0;
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(!out[y*gw+x]){S[y*gw+x]=1;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+ for(let y=y0;y<=y1;y++){if(S[y*gw])tl++;if(S[y*gw+gw-1])tr++}
+ const rows=y1-y0+1;return{S,gw,gh,c,x0:x0*c,x1:(x1+1)*c,y0:y0*c,y1:(y1+1)*c,clL:tl>.35*rows,clR:tr>.35*rows}}
+function mirrorPx(A,w,h){const o=new A.constructor(A.length);for(let y=0;y<h;y++)for(let x=0;x<w;x++)o[y*w+x]=A[y*w+(w-1-x)];return o}
+function bookCore(M,L,R,w,h,single){ // trang cần lấy là trang TRÁI (mép ngoài ở bên trái), hoặc trang đơn nếu single
+ const{S,gw,c}=R,sd=morph(S,gw,R.gh,1,1),ok=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&M[y*w+x]&&sd[((y/c)|0)*gw+((x/c)|0)],
+ run=(f,k)=>{for(let i=0;i<k;i++)if(!f(i))return false;return true},
+ Wsp=R.x1-R.x0,Hsp=R.y1-R.y0,RUN=6,ptsL=[],ptsT=[],ptsB=[],ptsR=[];
+ for(let y=Math.round(R.y0+.15*Hsp);y<R.y1-.15*Hsp;y+=3){for(let x=0;x<w-RUN;x++)if(ok(x,y)&&run(i=>ok(x+i,y),RUN)){ptsL.push([x,y]);break}}
+ const xa=R.x0+(single?.1:.1)*Wsp,xb=R.x0+(single?.9:.5)*Wsp;
+ for(let x=Math.round(xa);x<xb;x+=3){for(let y=0;y<h-RUN;y++)if(ok(x,y)&&run(i=>ok(x,y+i),RUN)){ptsT.push([x,y]);break}
+  for(let y=h-1;y>=RUN;y--)if(ok(x,y)&&run(i=>ok(x,y-i),RUN)){ptsB.push([x,y]);break}}
+ const vert=u=>Math.abs(u[0])<.36,hor=u=>Math.abs(u[1])<.5,lL=ransacLine(ptsL,vert,2.5),lT=ransacLine(ptsT,hor,3),lB=ransacLine(ptsB,hor,3);
+ if(!lL||!lT||!lB)return null;
+ const TL=lix(lL,lT),BL=lix(lL,lB);if(!TL||!BL)return null;
+ if(single){for(let y=Math.round(R.y0+.15*Hsp);y<R.y1-.15*Hsp;y+=3)for(let x=w-1;x>=RUN;x--)if(ok(x,y)&&run(i=>ok(x-i,y),RUN)){ptsR.push([x,y]);break}
+  const lR=ransacLine(ptsR,vert,2.5);if(!lR)return null;const TR=lix(lR,lT),BR=lix(lR,lB);if(!TR||!BR)return null;return{q:[TL,TR,BR,BL],conf:1,lT,lB}}
+ const Hd=Math.hypot(BL[0]-TL[0],BL[1]-TL[1]),pw0=Hd/ASP(),sL=lL.u[0]/lL.u[1],ym=(TL[1]+BL[1])/2,xm=lL.p[0]+sL*(ym-lL.p[1]),
+ // đường sẫm mảnh chạy dọc = gáy/mép trang: tích phân đáp ứng dọc theo đường x=x0+s*(y-ym)
+ resp=(x,y)=>{if(x<10||x>=w-10||y<0||y>=h)return 0;const i=y*w+x,a=(L[i-8]+L[i-7]+L[i-6]+L[i-5])/4,b=(L[i+5]+L[i+6]+L[i+7]+L[i+8])/4,m=Math.min(L[i-1],L[i],L[i+1]);return Math.max(0,Math.min(30,(a+b)/2-m))};
+ const ys=[];for(let y=Math.round(TL[1]+.1*Hd);y<BL[1]-.1*Hd;y+=4)ys.push(y);
+ let best=-1,bx=0,bs=0,sum=0,cn=0;
+ for(let x0=Math.round(xm+.72*pw0);x0<=xm+1.15*pw0;x0+=2)for(let s=sL-.04;s<=sL+.22;s+=.01){let tot=0;
+  for(const y of ys){const x=Math.round(x0+s*(y-ym));let m=0;for(let d=-1;d<=1;d++)m=Math.max(m,resp(x+d,y));tot+=m}
+  sum+=tot;cn++;if(tot>best){best=tot;bx=x0;bs=s}}
+ const avg=sum/Math.max(1,cn),conf=best/(avg||1),g={p:[bx,ym],u:[bs/Math.hypot(bs,1),1/Math.hypot(bs,1)]};
+ // khớp lại cạnh trên/dưới trên cả đoạn tới gáy (bám độ cong của trang)
+ const xe=Math.min(bx-6,xm+1.02*pw0),pt2=ptsT.filter(p=>p[0]<xe),pb2=ptsB.filter(p=>p[0]<xe);
+ for(let x=Math.round(R.x0+.5*Wsp);x<xe;x+=3){for(let y=0;y<h-RUN;y++)if(ok(x,y)&&run(i=>ok(x,y+i),RUN)){pt2.push([x,y]);break}
+  for(let y=h-1;y>=RUN;y--)if(ok(x,y)&&run(i=>ok(x,y-i),RUN)){pb2.push([x,y]);break}}
+ const T2=ransacLine(pt2,hor,3.5)||lT,B2=ransacLine(pb2,hor,3.5)||lB,
+ TL2=lix(lL,T2)||TL,BL2=lix(lL,B2)||BL,TR=lix(g,T2),BR=lix(g,B2);
+ if(!TR||!BR)return null;return{q:[TL2,TR,BR,BL2],conf,lT:T2,lB:B2,g}}
+function detectBook(d,w,h){const D=d.data,fail={q:[[w*.03,h*.03],[w*.97,h*.03],[w*.97,h*.97],[w*.03,h*.97]],note:"không tìm thấy trang - hãy kéo 4 góc",rv:true,fail:true};
+ let{M,L}=bookMask(D,w,h),R=bookRegion(M,w,h);if(!R)return fail;
+ const flip=R.clL&&!R.clR,single=!R.clL&&!R.clR;if(R.clL&&R.clR)return fail;
+ if(flip){M=mirrorPx(M,w,h);L=mirrorPx(L,w,h);R=bookRegion(M,w,h);if(!R)return fail}
+ const r=bookCore(M,L,R,w,h,single);if(!r)return fail;
+ let q=r.q;if(flip)q=[[w-1-q[1][0],q[1][1]],[w-1-q[0][0],q[0][1]],[w-1-q[3][0],q[3][1]],[w-1-q[2][0],q[2][1]]];
+ q=q.map(p=>[Math.min(w-1,Math.max(0,p[0])),Math.min(h-1,Math.max(0,p[1]))]);
+ const weak=!single&&r.conf<2.2,odd=!plaus(q,w,h),rv=weak||odd;return{q:grow(q,.012),note:weak?"gáy sách không rõ - nên kiểm tra":odd?"hình dạng trang bất thường - nên kiểm tra":"",rv,book:true,conf:r.conf}}
+
+function detect(d,w,h,mode){mode=mode||'auto';
+ if(mode=='book')return detectBook(d,w,h);if(mode=='color')return detectColor(d,w,h);if(mode=='bg')return detectBg(d,w,h);
+ const k=detectBook(d,w,h);if(!k.fail)return k; // sách giấy trắng + dải vàng: ưu tiên
+ const a=detectColor(d,w,h);if(!a.rv&&plaus(a.q,w,h))return a;
+ const b=detectBg(d,w,h);return b.fail?a:b}
+/* ---------- tải & phân tích ảnh ---------- */
+async function load(f){const b=await createImageBitmap(f),c=document.createElement('canvas');c.width=b.width;c.height=b.height;
+ const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(b,0,0);b.close();return c}
+function small(c,m=800){const s=Math.min(1,m/Math.max(c.width,c.height)),k=document.createElement('canvas');k.width=Math.round(c.width*s);k.height=Math.round(c.height*s);
+ const x=k.getContext('2d',{willReadFrequently:true});x.drawImage(c,0,0,k.width,k.height);return{s,k,d:x.getImageData(0,0,k.width,k.height)}}
+function yel(d,q,s){const W=200,H=Math.round(W*ASP()),o=warp(d,q.map(p=>[p[0]*s,p[1]*s]),W,H).data;let n=0,t=0;
+ for(let y=0;y<H*.22;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4,r=o[i],g=o[i+1],b=o[i+2];t++;if(r>150&&g>130&&b<120&&r-b>90)n++}return n/t}
+async function start(files){
+ files=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|bmp)$/i.test(f.name));
+ files.sort((a,b)=>(a.webkitRelativePath||a.name).localeCompare(b.webkitRelativePath||b.name,undefined,{numeric:true}));
+ if(!files.length){$('#st').textContent="Không có ảnh.";return}
+ items=[];trash=[];$('#undo').disabled=true;pgs=null;busy=true;
+ for(let i=0;i<files.length;i++){$('#st').textContent=`Đang phân tích ${i+1}/${files.length}…`;prog(i/files.length);await tick();
+  try{const c=await load(files[i]),{s,d}=small(c),r=detect(d,d.width,d.height,$('#mode').value),q=r.q.map(p=>[p[0]/s,p[1]/s]);
+   items.push({f:files[i],name:files[i].webkitRelativePath||files[i].name,q,note:r.note,rv:r.rv,man:false,num:"",st:yel(d,r.q,1)>=.33});
+  }catch(e){items.push({f:files[i],name:files[i].name,q:[[0,0],[1,0],[1,1],[0,1]],note:"không đọc được ảnh",rv:true,man:false,num:"",st:false,bad:true})}}
+ prog(null);busy=false;$('#pdfb').disabled=$('#zipb').disabled=false;$('#st').textContent=`${items.length} ảnh. Kiểm tra từng ảnh (ảnh có ! là nghi ngờ), điền số trang rồi xuất.`;
+ buildList();sel(Math.max(0,items.findIndex(i=>i.rv)))}
+$('#dir').onchange=e=>start(e.target.files);$('#fl').onchange=e=>start(e.target.files);
+/* ---------- danh sách ---------- */
+function buildList(){const L=$('#list');L.textContent='';items.forEach((it,i)=>{const r=document.createElement('div');r.className='row';r.id='r'+i;
+ const s=document.createElement('span');s.title=it.name;s.textContent=mark(it)+' '+it.name.split('/').pop();
+ const n=document.createElement('input');n.type='number';n.placeholder='tr.';n.value=it.num;n.onclick=e=>e.stopPropagation();n.oninput=()=>{it.num=n.value;pgs=null};
+ const c=document.createElement('input');c.type='checkbox';c.checked=it.st;c.title='Trang đầu bài';c.onclick=e=>e.stopPropagation();c.onchange=()=>{it.st=c.checked;pgs=null};
+ const x=document.createElement('button');x.className='x';x.textContent='🗑';x.title='Xóa ảnh này khỏi danh sách';x.onclick=e=>{e.stopPropagation();delAt(i)};r.append(s,n,c,x);r.onclick=()=>sel(i);L.append(r)})}
+const mark=it=>it.man?'✎':it.rv?'!':'✓';
+function relabel(i){const r=$('#r'+i);if(r)r.firstChild.textContent=mark(items[i])+' '+items[i].name.split('/').pop()}
+$('#num').onclick=()=>{let n=+$('#n0').value||1;items.forEach((it,i)=>{it.num=n++;$('#r'+i).children[1].value=it.num});pgs=null};
+/* ---------- bộ chỉnh góc ---------- */
+async function sel(i){cur=i;document.querySelectorAll('.row').forEach((r,k)=>r.classList.toggle('on',k==i));$('#r'+i)?.scrollIntoView({block:'nearest'});
+ const it=items[i];$('#nt').textContent=it.note&&!it.man?it.note:'';
+ const c=await load(it.f);if(cur!=i)return;const sm=small(c,760);view={c,s:sm.s,k:sm.k,d:sm.d};draw()}
+function dzf(){const cv=$('#cv');return cv.getBoundingClientRect().width/cv.width||1}
+function applyZoom(){const cv=$('#cv'),w=$('#wrap');let z=zm;
+ if(zm=='fit')z=Math.min((w.clientWidth-4)/cv.width,(innerHeight*.78-4)/cv.height,1);
+ z=Math.max(.1,Math.min(3,z));cv.style.width=Math.round(cv.width*z)+'px';cv.style.height=Math.round(cv.height*z)+'px';
+ $('#zl').textContent=(zm=='fit'?'Vừa ':'')+Math.round(z*100)+'%'}
+const UF=()=>Math.max(.5,Math.min(8,1/dzf())),mids=q=>q.map((p,i)=>{const n=q[(i+1)%4];return[(p[0]+n[0])/2,(p[1]+n[1])/2]});
+function draw(){const it=items[cur],cv=$('#cv'),x=cv.getContext('2d'),P=40;cv.width=view.k.width+2*P;cv.height=view.k.height+2*P;applyZoom();const u=UF();
+ x.fillStyle='#333';x.fillRect(0,0,cv.width,cv.height);x.drawImage(view.k,P,P);const q=it.q.map(p=>[p[0]*view.s+P,p[1]*view.s+P]);
+ x.strokeStyle='#00e000';x.lineWidth=2*u;x.beginPath();q.forEach((p,k)=>k?x.lineTo(...p):x.moveTo(...p));x.closePath();x.stroke();
+ q.forEach((p,k)=>{x.fillStyle='#e00000';x.strokeStyle='#fff';x.lineWidth=u;x.beginPath();x.arc(p[0],p[1],9*u,0,7);x.fill();x.stroke();x.fillStyle='#ff0';x.font='bold '+14*u+'px sans-serif';x.fillText(k+1,p[0]+12*u,p[1]-12*u)});
+ const M=mids(q);M.forEach(m=>{const s=7*u;x.fillStyle='#1f6feb';x.strokeStyle='#fff';x.lineWidth=u;x.beginPath();x.rect(m[0]-s,m[1]-s,2*s,2*s);x.fill();x.stroke()});
+ let lp=null;if(drag){if(typeof drag.k=='number')lp=q[drag.k];else if(drag.k=='e')lp=M[drag.e]}
+ if(lp){const R=60*u,S=3*u,lx=lp[0]<cv.width/2?cv.width-2*R-8*u:8*u,ly=8*u;
+  x.save();x.beginPath();x.rect(lx,ly,2*R,2*R);x.clip();x.fillStyle='#333';x.fillRect(lx,ly,2*R,2*R);
+  x.drawImage(view.k,lp[0]-P-R/S,lp[1]-P-R/S,2*R/S,2*R/S,lx,ly,2*R,2*R);
+  x.strokeStyle='#e00000';x.lineWidth=1.5*u;x.beginPath();x.moveTo(lx+R-9*u,ly+R);x.lineTo(lx+R+9*u,ly+R);x.moveTo(lx+R,ly+R-9*u);x.lineTo(lx+R,ly+R+9*u);x.stroke();x.restore()}
+ const pv=$('#pv'),W=300,H=Math.round(W*ASP());pv.width=W;pv.height=H;pv.getContext('2d').putImageData(warp(view.d,it.q.map(p=>[p[0]*view.s,p[1]*view.s]),W,H),0,0)}
+function pos(e){const cv=$('#cv'),r=cv.getBoundingClientRect(),k=cv.width/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]}
+const inside=(q,x,y)=>{let c=false;for(let i=0,j=3;i<4;j=i++)if((q[i][1]>y)!=(q[j][1]>y)&&x<(q[j][0]-q[i][0])*(y-q[i][1])/(q[j][1]-q[i][1])+q[i][0])c=!c;return c};
+$('#cv').onpointerdown=e=>{if(cur<0)return;const[x,y]=pos(e),pi=items[cur].q,q=pi.map(p=>[p[0]*view.s+40,p[1]*view.s+40]),u=UF(),d=q.map(p=>Math.hypot(p[0]-x,p[1]-y)),m=Math.min(...d),md=mids(q).map(p=>Math.hypot(p[0]-x,p[1]-y)),mm=Math.min(...md);
+ if(m<22*u)drag={k:d.indexOf(m)};
+ else if(mm<20*u){const i=md.indexOf(mm);drag={k:'e',e:i,x,y,a:[...pi[i]],b:[...pi[(i+1)%4]]}}
+ else if(inside(q,x,y))drag={k:'all',x,y};
+ else{const w=$('#wrap');drag={k:'pan',cx:e.clientX,cy:e.clientY,l:w.scrollLeft,t:w.scrollTop}}
+ e.target.setPointerCapture(e.pointerId);draw()};
+$('#cv').onpointermove=e=>{if(!drag)return;const it=items[cur];
+ if(drag.k=='pan'){const w=$('#wrap');w.scrollLeft=drag.l-(e.clientX-drag.cx);w.scrollTop=drag.t-(e.clientY-drag.cy);return}
+ const[x,y]=pos(e);
+ if(drag.k=='all'){const dx=(x-drag.x)/view.s,dy=(y-drag.y)/view.s;it.q=it.q.map(p=>[p[0]+dx,p[1]+dy]);drag.x=x;drag.y=y}
+ else if(drag.k=='e'){const dx=(x-drag.x)/view.s,dy=(y-drag.y)/view.s,i=drag.e,j=(i+1)%4;it.q[i]=[drag.a[0]+dx,drag.a[1]+dy];it.q[j]=[drag.b[0]+dx,drag.b[1]+dy]}
+ else it.q[drag.k]=[(x-40)/view.s,(y-40)/view.s];draw()};
+$('#cv').onpointerup=()=>{if(drag){const pan=drag.k=='pan';drag=null;if(pan)return;items[cur].man=true;items[cur].rv=false;$('#nt').textContent='';relabel(cur);pgs=null;draw()}};
+const go=d=>{const k=cur+d;if(k>=0&&k<items.length)sel(k)};$('#prev').onclick=()=>go(-1);$('#next').onclick=()=>go(1);
+addEventListener('keydown',e=>{if(e.target.tagName!='INPUT'){if(e.key=='ArrowLeft')go(-1);if(e.key=='ArrowRight')go(1);if(e.key=='Delete')delAt(cur)}});
+const scale=f=>{if(cur<0)return;items[cur].q=grow(items[cur].q,f);items[cur].man=true;items[cur].rv=false;relabel(cur);pgs=null;draw()};
+$('#gro').onclick=()=>scale(.01);$('#shr').onclick=()=>scale(-.01);
+$('#auto').onclick=()=>{if(cur<0)return;const r=detect(view.d,view.d.width,view.d.height,$('#mode').value),it=items[cur];it.q=r.q.map(p=>[p[0]/view.s,p[1]/view.s]);it.note=r.note;it.rv=r.rv;it.man=false;$('#nt').textContent=r.note;relabel(cur);pgs=null;draw()};
+/* ---------- zoom / xóa ảnh ---------- */
+function setZ(f){if(cur<0)return;const w=$('#wrap'),cx=(w.scrollLeft+w.clientWidth/2)/w.scrollWidth,cy=(w.scrollTop+w.clientHeight/2)/w.scrollHeight;
+ zm=Math.max(.1,Math.min(3,f(dzf())));draw();w.scrollLeft=cx*w.scrollWidth-w.clientWidth/2;w.scrollTop=cy*w.scrollHeight-w.clientHeight/2}
+$('#zo').onclick=()=>setZ(z=>z/1.25);$('#zi').onclick=()=>setZ(z=>z*1.25);$('#z1').onclick=()=>setZ(()=>1);
+$('#zf').onclick=()=>{zm='fit';if(cur>=0)draw()};
+$('#wrap').addEventListener('wheel',e=>{if(!e.ctrlKey||cur<0)return;e.preventDefault();setZ(z=>e.deltaY<0?z*1.15:z/1.15)},{passive:false});
+addEventListener('resize',()=>{if(zm=='fit'&&cur>=0)draw()});
+function refresh(k){buildList();$('#undo').disabled=!trash.length;const on=items.length>0;$('#pdfb').disabled=$('#zipb').disabled=!on;
+ $('#st').textContent=on?`${items.length} ảnh`+(trash.length?` (đã xóa ${trash.length})`:'')+'.':'Đã xóa hết ảnh. Chọn lại ảnh hoặc bấm “Hoàn tác xóa”.';
+ if(on)sel(Math.max(0,Math.min(k,items.length-1)));else{cur=-1;view=null;const cv=$('#cv'),pv=$('#pv');cv.width=760;cv.height=560;cv.style.width=cv.style.height='';pv.getContext('2d').clearRect(0,0,pv.width,pv.height);$('#nt').textContent=''}}
+function delAt(i){if(busy||i<0||i>=items.length)return;trash.push({it:items[i],i});items.splice(i,1);pgs=null;refresh(i)}
+$('#del').onclick=()=>delAt(cur);
+$('#undo').onclick=()=>{if(busy||!trash.length)return;const t=trash.pop();items.splice(Math.min(t.i,items.length),0,t.it);pgs=null;refresh(t.i)};
+/* ---------- PDF / ZIP ---------- */
+function pdf(p){const e=new TextEncoder(),ch=[],off=[];let len=0;const add=x=>{const u=typeof x=='string'?e.encode(x):x;ch.push(u);len+=u.length},
+ obj=(n,f)=>{off[n]=len;add(n+' 0 obj\n');f();add('\nendobj\n')},N=p.length;add('%PDF-1.4\n');
+ obj(1,()=>add('<</Type/Catalog/Pages 2 0 R>>'));obj(2,()=>add(`<</Type/Pages/Count ${N}/Kids[${p.map((_,i)=>(3+3*i)+' 0 R').join(' ')}]>>`));
+ p.forEach((g,i)=>{const a=3+3*i,w=595,h=Math.round(595*g.h/g.w),cs=`q ${w} 0 0 ${h} 0 0 cm /I Do Q`;
+  obj(a,()=>add(`<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${w} ${h}]/Resources<</XObject<</I ${a+2} 0 R>>>>/Contents ${a+1} 0 R>>`));
+  obj(a+1,()=>add(`<</Length ${cs.length}>>\nstream\n${cs}\nendstream`));
+  obj(a+2,()=>{add(`<</Type/XObject/Subtype/Image/Width ${g.w}/Height ${g.h}/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${g.data.length}>>\nstream\n`);add(g.data);add('\nendstream')})});
+ const xr=len,T=3*N+3;add(`xref\n0 ${T}\n0000000000 65535 f \n`);for(let n=1;n<T;n++)add(String(off[n]).padStart(10,'0')+' 00000 n \n');
+ add(`trailer\n<</Size ${T}/Root 1 0 R>>\nstartxref\n${xr}\n%%EOF`);return new Blob(ch,{type:'application/pdf'})}
+const CT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})(),
+crc=u=>{let c=-1;for(let i=0;i<u.length;i++)c=CT[(c^u[i])&255]^(c>>>8);return(c^-1)>>>0};
+function zip(fs){const e=new TextEncoder(),ch=[],cd=[];let off=0;for(const f of fs){const n=e.encode(f.name),c=crc(f.data),L=f.data.length,h=new DataView(new ArrayBuffer(30)),g=new DataView(new ArrayBuffer(46));
+ h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x800,true);h.setUint32(14,c,true);h.setUint32(18,L,true);h.setUint32(22,L,true);h.setUint16(26,n.length,true);ch.push(h.buffer,n,f.data);
+ g.setUint32(0,0x02014b50,true);g.setUint16(4,20,true);g.setUint16(6,20,true);g.setUint16(8,0x800,true);g.setUint32(16,c,true);g.setUint32(20,L,true);g.setUint32(24,L,true);g.setUint16(28,n.length,true);g.setUint32(42,off,true);cd.push(g.buffer,n);off+=30+n.length+L}
+ const cl=cd.reduce((s,x)=>s+x.byteLength,0),z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,fs.length,true);z.setUint16(10,fs.length,true);z.setUint32(12,cl,true);z.setUint32(16,off,true);
+ return new Blob([...ch,...cd,z.buffer],{type:'application/zip'})}
+async function render(){ // cắt từng trang ở độ phân giải đầy đủ, xếp theo số trang
+ if(pgs)return pgs;busy=true;const W=+$('#ow').value||1400,H=Math.round(W*ASP());let last=null;
+ const ord=items.map((it,k)=>{const n=it.num===''?null:+it.num;if(n!==null)last=n;return{it,k,key:n!==null?n:(last!==null?last+.001*(k+1):-1e3+k),n}}).sort((a,b)=>a.key-b.key||a.k-b.k);
+ const out=[],bad=[];for(let i=0;i<ord.length;i++){try{$('#msg').textContent=`Đang cắt trang ${i+1}/${ord.length}…`;prog(i/ord.length*.85);await tick();
+  const c=await load(ord[i].it.f),o=warp(c.getContext('2d').getImageData(0,0,c.width,c.height),ord[i].it.q,W,H),oc=document.createElement('canvas');oc.width=W;oc.height=H;oc.getContext('2d').putImageData(o,0,0);
+  const b=await new Promise(r=>oc.toBlob(r,'image/jpeg',.9));out.push({data:new Uint8Array(await b.arrayBuffer()),w:W,h:H,n:ord[i].n,st:ord[i].it.st})}catch(e){bad.push(ord[i].it.name.split('/').pop())}}
+ busy=false;if(!out.length)throw new Error('không cắt được trang nào (ảnh quá lớn hoặc không đọc được)');out.bad=bad;return pgs=out}
+async function save(name,blob){let d=null;try{d=typeof claude!='undefined'?await claude.use('downloads'):null}catch(e){}
+ if(!d){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();$('#msg').textContent='Đã gửi lệnh tải '+name+'.';return}
+ try{await d.save({filename:name,data:blob});$('#msg').textContent='Đã lưu '+name}catch(e){$('#msg').textContent=e.code=='declined'?'Bạn đã huỷ lưu.':'Không lưu được: '+(e.message||e.code)}}
+function report(p){const ns=p.map(x=>x.n).filter(x=>x!==null),miss=[];if(ns.length)for(let n=Math.min(...ns);n<=Math.max(...ns);n++)if(!ns.includes(n))miss.push(n);
+ return (p.bad&&p.bad.length?` ⚠ Bỏ qua ${p.bad.length} ảnh lỗi: ${p.bad.join(', ')}.`:'')+(miss.length?` ⚠ Thiếu trang: ${miss.join(', ')}.`:'')}
+$('#pdfb').onclick=async()=>{if(busy)return;const p=await render();prog(.9);$('#msg').textContent='Đang ghép PDF…';await tick();const b=pdf(p);prog(.95);await save('SACH_day_du.pdf',b);prog(1);setTimeout(()=>prog(null),1500);$('#msg').textContent+=report(p)};
+$('#zipb').onclick=async()=>{if(busy)return;const p=await render();$('#msg').textContent='Đang ghép PDF…';await tick();
+ prog(.88);const files=[],S=[];p.forEach((x,i)=>x.st&&S.push(i));
+ const rg=[];if(S.length){if(S[0]>0)rg.push(['00_Phan_dau',0,S[0]]);S.forEach((s,k)=>rg.push([`Bai_${String(k+1).padStart(2,'0')}`,s,k+1<S.length?S[k+1]:p.length]))}else rg.push(['Chua_danh_dau_bai',0,p.length]);
+ let gi=0;for(const[n,a,b]of rg){prog(.88+.1*gi++/rg.length);await tick();const q=p.slice(a,b),t=q[0].n!==null?`_tr${q[0].n}-${q[q.length-1].n??'?'}`:'';files.push({name:`TACH_THEO_BAI/${n}${t}.pdf`,data:new Uint8Array(await pdf(q).arrayBuffer())})}
+ prog(.99);await save('SACH_theo_bai.zip',zip(files));prog(1);setTimeout(()=>prog(null),1500);$('#msg').textContent+=report(p)+(S.length?'':' Chưa tick “đầu bài” nào.')};
+for(const id of ['#pdfb','#zipb']){const f=$(id).onclick;$(id).onclick=async()=>{try{await f()}catch(e){busy=false;prog(null);$('#msg').textContent='Lỗi: '+(e&&e.message||e)}}}
+</script>
+</body>
+</html>
