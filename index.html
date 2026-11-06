@@ -17,7 +17,7 @@ input[type=number]{width:70px;background:var(--card);color:var(--fg);border:1px 
 @media(max-width:1000px){.grid{grid-template-columns:1fr}}
 .box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}
 #list{max-height:70vh;overflow:auto}.row{display:flex;gap:6px;align-items:center;padding:4px;border-radius:6px;cursor:pointer}
-.row.on{background:color-mix(in srgb,var(--ac) 18%,transparent)}.row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.on{background:color-mix(in srgb,var(--ac) 18%,transparent)}.gp{cursor:grab;touch-action:none;user-select:none;color:var(--mut);padding:0 3px;font-size:17px;line-height:1}.row.dt{box-shadow:inset 0 3px 0 var(--ac)}.row.db{box-shadow:inset 0 -3px 0 var(--ac)}.row.mv{opacity:.45}#list.dragging{user-select:none}.row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row input[type=number]{width:54px}.mut{color:var(--mut);font-size:12px}.warn{color:var(--warn)}
 #wrap{overflow:auto;text-align:center;max-height:78vh}#cv{max-width:none;display:block;margin:0 auto}.row .x{padding:1px 6px;border-color:transparent;background:transparent}canvas{max-width:100%;touch-action:none;border-radius:6px}
 #pv{width:100%;height:auto;background:#888}
@@ -277,10 +277,22 @@ function buildList(){const L=$('#list');L.textContent='';items.forEach((it,i)=>{
  const s=document.createElement('span');s.title=it.name;s.textContent=mark(it)+' '+it.name.split('/').pop();
  const n=document.createElement('input');n.type='number';n.placeholder='tr.';n.value=it.num;n.onclick=e=>e.stopPropagation();n.oninput=()=>{it.num=n.value;pgs=null};
  const c=document.createElement('input');c.type='checkbox';c.checked=it.st;c.title='Trang đầu bài';c.onclick=e=>e.stopPropagation();c.onchange=()=>{it.st=c.checked;pgs=null};
- const x=document.createElement('button');x.className='x';x.textContent='🗑';x.title='Xóa ảnh này khỏi danh sách';x.onclick=e=>{e.stopPropagation();delAt(i)};r.append(s,n,c,x);r.onclick=()=>sel(i);L.append(r)})}
+ const x=document.createElement('button');x.className='x';x.textContent='🗑';x.title='Xóa ảnh này khỏi danh sách';x.onclick=e=>{e.stopPropagation();delAt(i)};const h=document.createElement('b');h.className='gp';h.textContent='⠿';h.title='Kéo để đổi thứ tự ảnh';h.onpointerdown=e=>dragStart(e,i);h.onclick=e=>e.stopPropagation();r.append(h,s,n,c,x);r.onclick=()=>sel(i);L.append(r)})}
 const mark=it=>it.man?'✎':it.rv?'!':'✓';
-function relabel(i){const r=$('#r'+i);if(r)r.firstChild.textContent=mark(items[i])+' '+items[i].name.split('/').pop()}
-$('#num').onclick=()=>{let n=+$('#n0').value||1;items.forEach((it,i)=>{it.num=n++;$('#r'+i).children[1].value=it.num});pgs=null};
+function relabel(i){const r=$('#r'+i);if(r)r.children[1].textContent=mark(items[i])+' '+items[i].name.split('/').pop()}
+$('#num').onclick=()=>{let n=+$('#n0').value||1;items.forEach((it,i)=>{it.num=n++;$('#r'+i).children[2].value=it.num});pgs=null};
+/* ---------- kéo thả đổi thứ tự ---------- */
+function dragStart(e,i){if(busy)return;e.preventDefault();e.stopPropagation();const L=$('#list'),dg={to:i};L.classList.add('dragging');document.querySelectorAll('.row')[i].classList.add('mv');
+ const mv=ev=>{const lr=L.getBoundingClientRect();if(ev.clientY<lr.top+28)L.scrollTop-=14;else if(ev.clientY>lr.bottom-28)L.scrollTop+=14;
+  const rows=[...document.querySelectorAll('.row')];let to=rows.length;
+  for(let k=0;k<rows.length;k++){const b=rows[k].getBoundingClientRect();if(ev.clientY<b.top+b.height/2){to=k;break}}
+  dg.to=to;rows.forEach((r,k)=>{r.classList.toggle('dt',k==to);r.classList.toggle('db',to==rows.length&&k==rows.length-1)})};
+ const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);L.classList.remove('dragging');
+  document.querySelectorAll('.row').forEach(r=>r.classList.remove('dt','db','mv'));moveItem(i,dg.to)};
+ addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up);mv(e)}
+function moveItem(a,to){if(to==a||to==a+1)return;const keep=items[cur],[it]=items.splice(a,1);items.splice(to>a?to-1:to,0,it);
+ const idx=[],nums=[];items.forEach((x,k)=>{if(x.num!==''&&x.num!=null){idx.push(k);nums.push(+x.num)}});nums.sort((p,q)=>p-q);idx.forEach((k,j)=>items[k].num=nums[j]);
+ pgs=null;cur=items.indexOf(keep);buildList();document.querySelectorAll('.row').forEach((r,k)=>r.classList.toggle('on',k==cur))}
 /* ---------- bộ chỉnh góc ---------- */
 async function sel(i){cur=i;document.querySelectorAll('.row').forEach((r,k)=>r.classList.toggle('on',k==i));$('#r'+i)?.scrollIntoView({block:'nearest'});
  const it=items[i];$('#nt').textContent=it.note&&!it.man?it.note:'';
